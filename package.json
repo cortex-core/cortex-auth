@@ -1,0 +1,28 @@
+{
+  "name": "cortex-auth",
+  "version": "0.0.1",
+  "description": "Provides a baseline 0auth server implementation",
+  "main": "service.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/turgutbasar/cortex-auth.git"
+  },
+  "keywords": [
+    "0auth"
+  ],
+  "author": "Basar Turgut",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/turgutbasar/cortex-auth/issues"
+  },
+  "homepage": "https://github.com/turgutbasar/cortex-auth#readme",
+  "dependencies": {
+    "body-parser": "^1.18.3",
+    "chai": "^4.2.0",
+    "express": "^4.16.4",
+    "mocha": "^5.2.0"
+  }
+}
