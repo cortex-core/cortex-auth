@@ -11,3 +11,5 @@ app.use(bodyParser.urlencoded({
 app.listen(8080, function() {
   console.log("0auth service listening 8080")
 });
+
+module.exports = app;
