@@ -3,10 +3,13 @@ const helmet = require('helmet');
 const bodyParser = require('body-parser');
 const winston = require('winston');
 const jwt = require('jsonwebtoken');
+const { MongoClient, ObjectId } = require('mongodb');
+
+const url = 'mongodb://localhost:27017/';
 
 const TTL = 180;
 
-const logger = winston.createLogger({
+const log = winston.createLogger({
     level: 'silly',
     format: winston.format.json(),
     transports: [
@@ -15,6 +18,7 @@ const logger = winston.createLogger({
 });
 
 let app = express();
+let _db = undefined;
 
 app.use(helmet());
 app.use(bodyParser.json());
@@ -23,49 +27,95 @@ app.use(bodyParser.urlencoded({
 }));
 
 app.post('/authenticate', function(req, res) {
-    logger.debug("Authenticate method is being called");
+    log.debug("Authenticate method is being called");
+    if (req.body == null || req.body.secret == null) {
+        res.status(403).send("Invalid Request");
+        return;
+    }
     let secret = req.body.secret;
 
     // get the decoded payload and header
     var decoded = jwt.decode(secret, {complete: true});
-    console.log(decoded.header);
-    console.log(decoded.payload);
 
+    // get account id and algorithm to verify authentication token
     let account_id = decoded.payload.account_id;
-    let created = decoded.payload.created || new Date().getTime();
+    let alg = decoded.header.alg;
 
-    if(created > new Date().getTime() + TTL * 1000000) {
-        res.send(401, 'Invalid token');
-    }
-
-    // verify token
-    // TODO : Implement user's public key retrival from db
-    var cert = '-----BEGIN PUBLIC KEY-----\n' +
-        'MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDdlatRjRjogo3WojgGHFHYLugd\n' +
-        'UWAY9iR3fy4arWNA1KoS8kVw33cJibXr8bvwUAUparCwlvdbH6dvEOfou0/gCFQs\n' +
-        'HUfQrSDv+MuSUMAe8jzKE4qW+jK+xQU9a03GUnKHkkle+Q0pX/g6jXZ7r1/xAK5D\n' +
-        'o2kQ+X5xK9cipRgEKwIDAQAB\n' +
-        '-----END PUBLIC KEY-----';  // get public key
-    jwt.verify(secret, cert, function(err, decoded) {
+    // bring public key of account to verify authentication token, findBy account id and algorithm
+    _db.collection("accounts").findOne({"_id" :ObjectId(account_id), "alg1":alg}, function (err, result) {
         if(err != null) {
-            res.status(401).send(err);
+            log.error("DB returned error.");
+            res.status(503).send(err);
             return;
         }
-        // TODO : Our assigned secret_key for user
-        // TODO : Put data into JWT payload
-        // TODO : Sign
-        res.json({
-            token: 'test',
-            role: 'undefined',
-            expiry: new Date().toUTCString(),
-            created: new Date().toUTCString(),
-            updated: new Date().toUTCString()
+
+        if(result == null) {
+            res.status(403).send("Forbidden");
+            return;
+        }
+
+        let pkey = result.account_public_key;
+        jwt.verify(secret, pkey, function(err, decoded) {
+            if(err != null) {
+                res.status(403).send("Forbidden");
+                return;
+            }
+            let now = Date.now();
+            let token = jwt.sign({ account_id: result._id, role: 'workforce', iat: Math.floor(now / 1000) + TTL}, result.server_secret, { algorithm: result.alg2});
+            res.json({
+                token: token,
+                role: 'workforce',
+                ttl: TTL,
+                created:now
+            });
         });
     });
 });
 
-app.listen(8080, function() {
-  console.log("0auth service listening 8080")
+app.post('/authorize', function(req, res) {
+    log.debug("Authorization method is being called");
+    if (req.body == null || req.body.access_token == null) {
+        res.status(403).send("Invalid Request");
+        return;
+    }
+    let access_token = req.body.access_token;
+
+    // get the decoded payload and header
+    let decoded = jwt.decode(access_token, {complete: true});
+
+    let account_id = decoded.payload.account_id;
+    let alg = decoded.header.alg;
+
+    // verify token
+    _db.collection("accounts").findOne({"_id" :ObjectId(account_id), "alg2":alg}, function (err, result) {
+        if(err != null) {
+            log.error("DB returned error.");
+            res.status(503).send(err);
+            return;
+        }
+
+        if(result == null) {
+            res.status(403).send("Forbidden");
+            return;
+        }
+
+        let server_secret = result.server_secret;  // get public key
+        jwt.verify(access_token, server_secret, function(err, decoded) {
+            if(err != null) {
+                res.status(401).send(err);
+                return;
+            }
+            res.status(200).send();
+        });
+    });
+});
+
+MongoClient.connect(url, function(err, db) {
+    log.info("Mongo DB connection has been provided.");
+    _db = db.db("cortex-auth");
+    app.listen(8080, function() {
+        log.info("oauth started.");
+    });
 });
 
 module.exports = app;
