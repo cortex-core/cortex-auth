@@ -4,7 +4,7 @@
   "description": "Provides a baseline 0auth server implementation",
   "main": "service.js",
   "scripts": {
-    "test": "mocha --exit"
+    "test": "mocha --recursive --exit"
   },
   "repository": {
     "type": "git",

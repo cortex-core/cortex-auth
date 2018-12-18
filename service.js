@@ -42,6 +42,12 @@ app.use(bodyParser.urlencoded({
 app.use(validator());
 
 MongoClient.connect(url, function(err, db) {
+
+    if (err) {
+        log.error("Mongo DB connection has been failed.");
+        throw err;
+    }
+
     log.info("Mongo DB connection has been provided.");
     _db = db.db("cortex-auth");
 
@@ -113,8 +119,8 @@ MongoClient.connect(url, function(err, db) {
         });
     });
 
-    app.listen(8080, function() {
-        log.info("oauth started.");
+    app.listen(9999, function() {
+        log.info("OAuth started.");
     });
 });
 
