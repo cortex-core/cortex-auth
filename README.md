@@ -1,5 +1,5 @@
 # cotex-auth
-Provides a baseline OAuth like server implementation
+Provides a baseline OAuth like service implementation
 
 Build Status of Master:
 
