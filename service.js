@@ -6,8 +6,10 @@ const jwt = require('jsonwebtoken');
 const { MongoClient, ObjectId } = require('mongodb');
 const validator = require('express-validator');
 const _ = require('lodash');
+const ChainClient = require('./src/chain/chain');
 
 const url = 'mongodb://localhost:27017/';
+const chain = new ChainClient();
 
 const TTL = 180;
 
@@ -69,21 +71,16 @@ MongoClient.connect(url, function(err, db) {
         // get account id and algorithm to verify authentication token
         let account_id = decoded.payload.account_id;
         let alg = decoded.header.alg;
+        let role = decoded.header.role;
 
-        // bring public key of account to verify authentication token, findBy account id and algorithm
-        _db.collection("accounts").findOne({"_id" :ObjectId(account_id), "alg1":alg}, function (err, result) {
-            if(err != null) {
-                log.error("DB returned error.");
-                res.status(503).send(err);
-                return;
-            }
-
-            if(result == null) {
+        // bring public key of account to verify authentication token, findBy account
+        chain.query_signature({account: account_id, alg:alg} , function (response) {
+            if(response == null) {
                 res.status(404).send("There is no such account!");
                 return;
             }
 
-            let pkey = result.account_public_key;
+            let pkey = result.account_signature;
 
             jwt.verify(secret, pkey, function(err) {
                 if(err != null) {
@@ -91,10 +88,10 @@ MongoClient.connect(url, function(err, db) {
                     return;
                 }
                 let now = Date.now();
-                let token = jwt.sign({ account_id: result._id, role: 'workforce', iat: Math.floor(now / 1000) + TTL}, get_server_secret(), { algorithm: 'HS512'});
+                let token = jwt.sign({ account_id: result._id, role: role, iat: Math.floor(now / 1000) + TTL}, get_server_secret(), { algorithm: 'HS512'});
                 res.json({
                     token: token,
-                    role: 'workforce',
+                    role: role,
                     ttl: TTL,
                     created:now
                 });
@@ -120,7 +117,7 @@ MongoClient.connect(url, function(err, db) {
     });
 
     app.listen(9999, function() {
-        log.info("OAuth started.");
+        log.info("cortex-auth listening 9999");
     });
 });
 
